@@ -35,8 +35,9 @@ void onOTAEnd(bool success) {
 
 // --- Access Point Configuration ---
 // This is the network the Robot will create
-#define AP_SSID  "Sesame-Controller-BETA"
-#define AP_PASS  "12345678" // Must be at least 8 characters
+const String DEFAULT_AP_SSID = "Sesame-Controller-BETA";
+const String AP_PASS = "12345678"; // Must be at least 8 characters
+String currentAPSSID = DEFAULT_AP_SSID;
 
 // --- Station Mode Configuration (Optional) ---
 // Set these to connect to your home/office WiFi network
@@ -216,6 +217,7 @@ void handleSetSettings();
 void handleGetStatus();
 void handleApiCommand();
 void updateWifiInfoScroll();
+void updateWifiInfoDisplay();
 void recordInput();
 
 void handleRoot() {
@@ -288,7 +290,7 @@ void handleGetStatus() {
   json += "\"currentFace\":\"" + currentFaceName + "\",";
   json += "\"networkConnected\":" + String(networkConnected ? "true" : "false") + ",";
   json += "\"apIP\":\"" + WiFi.softAPIP().toString() + "\",";
-  json += "\"apSSID\":\"" + String(AP_SSID) + "\",";
+  json += "\"apSSID\":\"" + currentAPSSID + "\",";
   json += "\"hostname\":\"" + deviceHostname + "\"";
   
   if (networkConnected) {
@@ -408,15 +410,20 @@ void setup() {
   display.display();
 
   WiFi.mode(WIFI_AP_STA);
-  WiFi.softAP(AP_SSID, AP_PASS);
+  WiFi.softAP(currentAPSSID.c_str(), AP_PASS.c_str());
   
   preferences.begin("sesame-wifi", true);
   savedSSID = preferences.getString("ssid", "");
   savedPassword = preferences.getString("pass", "");
   deviceHostname = preferences.getString("hostname", DEFAULT_HOSTNAME);
+  String savedAPSSID = preferences.getString("apssid", "");
+  if (savedAPSSID.length() > 0) {
+    currentAPSSID = savedAPSSID;
+  }
   preferences.end();
 
   Serial.println("[HOSTNAME] Device name: " + deviceHostname);
+  Serial.println("[HOSTNAME] AP SSID: " + currentAPSSID);
 
   if (savedSSID.length() > 0) {
     Serial.println("[WIFI] Attempting saved connection: " + savedSSID);
@@ -878,36 +885,47 @@ void updateWifiInfoScroll() {
 
 void checkWiFiStatus() {
   int currentStatus = WiFi.status();
-  if (currentStatus != lastWifiStatus) {
-    if (lastWifiStatus != -1) {
-      if (currentStatus == WL_CONNECTED) {
-        networkConnected = true;
-        networkIP = WiFi.localIP();
-        Serial.println("[WIFI] Status: CONNECTED | IP: " + networkIP.toString());
-        updateWifiInfoText();
-        
-        if (!MDNS.begin(deviceHostname.c_str())) {
-          Serial.println("[mDNS] Error starting");
-        } else {
-          MDNS.addService("http", "tcp", 80);
-        }
-      } else {
-        Serial.println("[WIFI] Status: DISCONNECTED");
-        networkConnected = false;
-        updateWifiInfoText();
-      }
+  
+  // Check if we just connected to WiFi
+  if (currentStatus == WL_CONNECTED && !networkConnected) {
+    networkConnected = true;
+    networkIP = WiFi.localIP();
+    Serial.println("[WIFI] Status: CONNECTED | IP: " + networkIP.toString());
+    updateWifiInfoText();
+    updateWifiInfoDisplay(); // Force refresh display
+    
+    if (!MDNS.begin(deviceHostname.c_str())) {
+      Serial.println("[mDNS] Error starting");
+    } else {
+      MDNS.addService("http", "tcp", 80);
     }
-    lastWifiStatus = currentStatus;
+  }
+  // Check if we got disconnected
+  else if (currentStatus != WL_CONNECTED && networkConnected) {
+    Serial.println("[WIFI] Status: DISCONNECTED");
+    networkConnected = false;
+    updateWifiInfoText();
+    updateWifiInfoDisplay(); // Force refresh display
+  }
+  
+  lastWifiStatus = currentStatus;
+}
+
+// Force immediate display update
+void updateWifiInfoDisplay() {
+  if (showingWifiInfo) {
+    wifiScrollPos = 0;
+    lastWifiScrollMs = millis();
   }
 }
 
 void updateWifiInfoText() {
   IPAddress apIP = WiFi.softAPIP();
   if (networkConnected) {
-    wifiInfoText = "AP: " + String(AP_SSID) + " (" + apIP.toString() + ")  |  Network: " + 
+    wifiInfoText = "AP: " + currentAPSSID + " (" + apIP.toString() + ")  |  Network: " + 
                    WiFi.SSID() + " (" + networkIP.toString() + ") or " + deviceHostname + ".local  |  ";
   } else {
-    wifiInfoText = "WiFi: " + String(AP_SSID) + " | Pass: " + String(AP_PASS) + " | IP: " + 
+    wifiInfoText = "WiFi: " + currentAPSSID + " | Pass: " + AP_PASS + " | IP: " + 
                    apIP.toString() + " | http://" + deviceHostname + ".local  |  ";
   }
 }
@@ -967,7 +985,7 @@ void handleSetHostname() {
   
   String newHostname = server.arg("hostname");
   
-  // Validate hostname
+  // Validate hostname (lowercase, no spaces)
   newHostname.trim();
   newHostname.toLowerCase();
   
@@ -987,13 +1005,31 @@ void handleSetHostname() {
     newHostname = DEFAULT_HOSTNAME;
   }
   
+  // Create friendly display name from hostname (sesame-green -> Sesame Green)
+  String friendlyName = newHostname;
+  friendlyName.replace("-", " ");
+  // Capitalize first letter of each word
+  if (friendlyName.length() > 0) {
+    friendlyName[0] = toupper(friendlyName[0]);
+    for (int i = 1; i < friendlyName.length(); i++) {
+      if (friendlyName[i-1] == ' ') {
+        friendlyName[i] = toupper(friendlyName[i]);
+      }
+    }
+  }
+  
+  // Create AP SSID from friendly name
+  String newAPSSID = friendlyName + " AP";
+  
   Serial.println("[HOSTNAME] Saving: " + newHostname);
+  Serial.println("[HOSTNAME] AP SSID: " + newAPSSID);
   
   preferences.begin("sesame-wifi", false);
   preferences.putString("hostname", newHostname);
+  preferences.putString("apssid", newAPSSID);
   preferences.end();
   
-  server.send(200, "text/plain", "Hostname saved: " + newHostname + ". Rebooting...");
+  server.send(200, "text/plain", "Saved: " + friendlyName + ". Rebooting...");
   delay(500);
   ESP.restart();
 }

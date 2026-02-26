@@ -361,7 +361,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   </style>
 </head>
 <body>
-  <h2>Sesame Controller</h2>
+  <h2 id="robotTitle">Loading...</h2>
   <div class="command-queue" id="queueStatus">Command Queue: 0/3</div>
   
   <div class="sections-container">
@@ -669,7 +669,28 @@ function resetWiFi() {
 // Load theme on page load
 document.addEventListener('DOMContentLoaded', () => {
   loadTheme();
+  loadDeviceName();
 });
+
+function loadDeviceName() {
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(data => {
+      // Convert hostname to friendly display name
+      // sesame-green -> Sesame Green, sesame-robot -> Sesame Robot
+      let friendlyName = data.hostname || 'Sesame';
+      friendlyName = friendlyName.replace(/-/g, ' ');
+      friendlyName = friendlyName.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+      
+      document.getElementById('robotTitle').textContent = friendlyName;
+      document.title = friendlyName + ' Controller';
+    })
+    .catch(() => {
+      document.getElementById('robotTitle').textContent = 'Sesame';
+    });
+}
 
 function loadTheme() {
   const savedColor = localStorage.getItem('themeColor');
