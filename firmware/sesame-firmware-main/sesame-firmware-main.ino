@@ -410,8 +410,8 @@ void setup() {
   display.display();
 
   WiFi.mode(WIFI_AP_STA);
-  WiFi.softAP(currentAPSSID.c_str(), AP_PASS.c_str());
   
+  // Load settings from Preferences BEFORE creating AP
   preferences.begin("sesame-wifi", true);
   savedSSID = preferences.getString("ssid", "");
   savedPassword = preferences.getString("pass", "");
@@ -424,6 +424,9 @@ void setup() {
 
   Serial.println("[HOSTNAME] Device name: " + deviceHostname);
   Serial.println("[HOSTNAME] AP SSID: " + currentAPSSID);
+
+  // Create AP with the correct SSID
+  WiFi.softAP(currentAPSSID.c_str(), AP_PASS.c_str());
 
   if (savedSSID.length() > 0) {
     Serial.println("[WIFI] Attempting saved connection: " + savedSSID);
