@@ -98,7 +98,8 @@ String wifiInfoText = "";
 // Network Mode
 bool networkConnected = false;
 IPAddress networkIP;
-String deviceHostname = "sesame-robot";
+const String DEFAULT_HOSTNAME = "sesame-robot";
+String deviceHostname = DEFAULT_HOSTNAME;
 
 // Servo Pins for Distro Board
 // ======================================================================
@@ -412,7 +413,10 @@ void setup() {
   preferences.begin("sesame-wifi", true);
   savedSSID = preferences.getString("ssid", "");
   savedPassword = preferences.getString("pass", "");
+  deviceHostname = preferences.getString("hostname", DEFAULT_HOSTNAME);
   preferences.end();
+
+  Serial.println("[HOSTNAME] Device name: " + deviceHostname);
 
   if (savedSSID.length() > 0) {
     Serial.println("[WIFI] Attempting saved connection: " + savedSSID);
@@ -449,7 +453,9 @@ void setup() {
 
   lastInputTime = millis();
   firstInputReceived = false;
-  showingWifiInfo = false;
+  showingWifiInfo = true;  // Show WiFi info immediately on startup
+  wifiScrollPos = 0;
+  lastWifiScrollMs = millis();
 
   if (!networkConnected) {
     if (MDNS.begin(deviceHostname.c_str())) {
@@ -470,6 +476,7 @@ void setup() {
   server.on("/scan", handleWiFiScan);
   server.on("/wificonnect", handleWiFiConnect);
   server.on("/resetwifi", handleWiFiReset);
+  server.on("/setHostname", handleSetHostname);
   
   server.onNotFound(handleRoot);
   
@@ -807,29 +814,31 @@ void recordInput() {
   if (!firstInputReceived) {
     firstInputReceived = true;
     showingWifiInfo = false;
+    // Restore the face when stopping WiFi info display
+    if (currentFaceFrames != nullptr && currentFaceFrameCount > 0) {
+      updateFaceBitmap(currentFaceFrames[currentFaceFrameIndex]);
+    }
   }
 }
 
 void updateWifiInfoScroll() {
-  // Don't show WiFi info if first input has been received
-  if (firstInputReceived) {
-    if (showingWifiInfo) {
-      showingWifiInfo = false;
-      // Restore the current face
-      if (currentFaceFrames != nullptr && currentFaceFrameCount > 0) {
-        updateFaceBitmap(currentFaceFrames[currentFaceFrameIndex]);
-      }
-    }
-    return;
-  }
-  
   unsigned long now = millis();
   
-  // Check if 30 seconds have passed without input
+  // If not showing WiFi info, check if we should start (after 30s idle)
   if (!showingWifiInfo && (now - lastInputTime >= 30000)) {
     showingWifiInfo = true;
     wifiScrollPos = 0;
     lastWifiScrollMs = now;
+  }
+  
+  // If WiFi info is active, check if we should stop (after 30s of activity)
+  if (showingWifiInfo && firstInputReceived && (now - lastInputTime < 30000)) {
+    showingWifiInfo = false;
+    // Restore the face
+    if (currentFaceFrames != nullptr && currentFaceFrameCount > 0) {
+      updateFaceBitmap(currentFaceFrames[currentFaceFrameIndex]);
+    }
+    return;
   }
   
   if (!showingWifiInfo) return;
@@ -946,6 +955,45 @@ void handleWiFiReset() {
   preferences.end();
   
   server.send(200, "text/plain", "WiFi credentials cleared. Rebooting...");
+  delay(500);
+  ESP.restart();
+}
+
+void handleSetHostname() {
+  if (!server.hasArg("hostname")) {
+    server.send(400, "text/plain", "Missing hostname parameter");
+    return;
+  }
+  
+  String newHostname = server.arg("hostname");
+  
+  // Validate hostname
+  newHostname.trim();
+  newHostname.toLowerCase();
+  
+  // Remove invalid characters
+  for (int i = newHostname.length() - 1; i >= 0; i--) {
+    char c = newHostname.charAt(i);
+    if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) {
+      newHostname.remove(i, 1);
+    }
+  }
+  
+  // Remove hyphens at start/end
+  while (newHostname.startsWith("-")) newHostname.remove(0, 1);
+  while (newHostname.endsWith("-")) newHostname.remove(newHostname.length() - 1, 1);
+  
+  if (newHostname.length() == 0) {
+    newHostname = DEFAULT_HOSTNAME;
+  }
+  
+  Serial.println("[HOSTNAME] Saving: " + newHostname);
+  
+  preferences.begin("sesame-wifi", false);
+  preferences.putString("hostname", newHostname);
+  preferences.end();
+  
+  server.send(200, "text/plain", "Hostname saved: " + newHostname + ". Rebooting...");
   delay(500);
   ESP.restart();
 }

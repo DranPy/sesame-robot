@@ -460,6 +460,15 @@ const char index_html[] PROGMEM = R"rawliteral(
       </div>
 
       <div class="settings-section">
+        <h4>Device Settings</h4>
+        <label>Device Name (mDNS):</label>
+        <input type="text" id="deviceName" placeholder="sesame-robot" maxlength="32">
+        <div style="font-size:11px;color:#666;margin-top:4px;">Allowed: a-z, 0-9, - (spaces/Polish chars auto-corrected)</div>
+        <button onclick="saveDeviceName()" style="width:100%;padding:10px;margin-top:10px;background:#3498db;color:#fff;border:none;cursor:pointer;border-radius:8px;font-size:13px;">Save Name</button>
+        <div id="deviceNameStatus" style="margin-top:8px;font-size:12px;color:#888;"></div>
+      </div>
+
+      <div class="settings-section">
         <h4>WiFi Settings</h4>
         <label>Network Name (SSID):</label>
         <button onclick="scanWiFi()" style="width:100%;padding:10px;margin-bottom:8px;background:#444;color:#fff;border:1px solid #555;cursor:pointer;font-size:13px;">Scan Networks</button>
@@ -543,6 +552,55 @@ function toggleWiFiPass() {
     passInput.type = 'password';
     btn.textContent = 'Show';
   }
+}
+
+function validateHostname(name) {
+  // Remove Polish characters and diacritics
+  let cleaned = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Replace spaces with hyphens
+  cleaned = cleaned.replace(/\s+/g, "-");
+  // Remove invalid characters (only a-z, 0-9, - allowed)
+  cleaned = cleaned.replace(/[^a-z0-9-]/g, "").toLowerCase();
+  // Remove hyphens at start/end
+  cleaned = cleaned.replace(/^-+|-+$/g, "");
+  // Limit length
+  cleaned = cleaned.substring(0, 32);
+  return cleaned || "sesame-robot";
+}
+
+function saveDeviceName() {
+  const statusEl = document.getElementById('deviceNameStatus');
+  const inputEl = document.getElementById('deviceName');
+  let originalName = inputEl.value.trim();
+  
+  if (!originalName) {
+    statusEl.textContent = 'Please enter a device name';
+    statusEl.style.color = '#e74c3c';
+    return;
+  }
+  
+  const validatedName = validateHostname(originalName);
+  
+  if (validatedName !== originalName) {
+    inputEl.value = validatedName;
+    statusEl.textContent = 'Name corrected: ' + validatedName;
+    statusEl.style.color = '#f39c12';
+  } else {
+    statusEl.textContent = 'Saving...';
+    statusEl.style.color = '#f39c12';
+  }
+  
+  fetch('/setHostname?hostname=' + encodeURIComponent(validatedName))
+    .then(r => r.text())
+    .then(msg => {
+      statusEl.textContent = 'Saved! Robot will restart...';
+      statusEl.style.color = '#2ecc71';
+      setTimeout(() => alert('Device name updated to: ' + validatedName + '. Robot will restart.'), 500);
+    })
+    .catch(err => {
+      statusEl.textContent = 'Error: ' + err;
+      statusEl.style.color = '#e74c3c';
+    });
 }
 
 function scanWiFi() {
