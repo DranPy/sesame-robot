@@ -36,8 +36,9 @@ void onOTAEnd(bool success) {
 // --- Access Point Configuration ---
 // This is the network the Robot will create
 const String DEFAULT_AP_SSID = "Sesame-Controller-BETA";
-const String AP_PASS = "12345678"; // Must be at least 8 characters
+const String DEFAULT_AP_PASS = "12345678"; // Must be at least 8 characters
 String currentAPSSID = DEFAULT_AP_SSID;
+String currentAPPass = DEFAULT_AP_PASS;
 
 // --- Station Mode Configuration (Optional) ---
 // Set these to connect to your home/office WiFi network
@@ -417,16 +418,21 @@ void setup() {
   savedPassword = preferences.getString("pass", "");
   deviceHostname = preferences.getString("hostname", DEFAULT_HOSTNAME);
   String savedAPSSID = preferences.getString("apssid", "");
+  String savedAPPass = preferences.getString("appass", "");
   if (savedAPSSID.length() > 0) {
     currentAPSSID = savedAPSSID;
+  }
+  if (savedAPPass.length() >= 8) {
+    currentAPPass = savedAPPass;
   }
   preferences.end();
 
   Serial.println("[HOSTNAME] Device name: " + deviceHostname);
   Serial.println("[HOSTNAME] AP SSID: " + currentAPSSID);
+  Serial.println("[HOSTNAME] AP Password: " + currentAPPass);
 
   // Create AP with the correct SSID
-  WiFi.softAP(currentAPSSID.c_str(), AP_PASS.c_str());
+  WiFi.softAP(currentAPSSID.c_str(), currentAPPass.c_str());
 
   if (savedSSID.length() > 0) {
     Serial.println("[WIFI] Attempting saved connection: " + savedSSID);
@@ -487,6 +493,7 @@ void setup() {
   server.on("/wificonnect", handleWiFiConnect);
   server.on("/resetwifi", handleWiFiReset);
   server.on("/setHostname", handleSetHostname);
+  server.on("/setApPassword", handleSetApPassword);
   
   server.onNotFound(handleRoot);
   
@@ -928,7 +935,7 @@ void updateWifiInfoText() {
     wifiInfoText = "AP: " + currentAPSSID + " (" + apIP.toString() + ")  |  Network: " + 
                    WiFi.SSID() + " (" + networkIP.toString() + ") or " + deviceHostname + ".local  |  ";
   } else {
-    wifiInfoText = "WiFi: " + currentAPSSID + " | Pass: " + AP_PASS + " | IP: " + 
+    wifiInfoText = "WiFi: " + currentAPSSID + " | Pass: " + currentAPPass + " | IP: " + 
                    apIP.toString() + " | http://" + deviceHostname + ".local  |  ";
   }
 }
@@ -1033,6 +1040,30 @@ void handleSetHostname() {
   preferences.end();
   
   server.send(200, "text/plain", "Saved: " + friendlyName + ". Rebooting...");
+  delay(500);
+  ESP.restart();
+}
+
+void handleSetApPassword() {
+  if (!server.hasArg("password")) {
+    server.send(400, "text/plain", "Missing password parameter");
+    return;
+  }
+  
+  String newPassword = server.arg("password");
+  
+  if (newPassword.length() < 8) {
+    server.send(400, "text/plain", "Password must be at least 8 characters");
+    return;
+  }
+  
+  Serial.println("[AP] Saving new password");
+  
+  preferences.begin("sesame-wifi", false);
+  preferences.putString("appass", newPassword);
+  preferences.end();
+  
+  server.send(200, "text/plain", "AP password saved. Rebooting...");
   delay(500);
   ESP.restart();
 }

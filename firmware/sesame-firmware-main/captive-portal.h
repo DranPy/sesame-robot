@@ -466,6 +466,14 @@ const char index_html[] PROGMEM = R"rawliteral(
         <div style="font-size:11px;color:#666;margin-top:4px;">Allowed: a-z, 0-9, - (spaces/Polish chars auto-corrected)</div>
         <button onclick="saveDeviceName()" style="width:100%;padding:10px;margin-top:10px;background:#3498db;color:#fff;border:none;cursor:pointer;border-radius:8px;font-size:13px;">Save Name</button>
         <div id="deviceNameStatus" style="margin-top:8px;font-size:12px;color:#888;"></div>
+        
+        <label style="margin-top:20px;">AP Password:</label>
+        <div style="display:flex;gap:5px;">
+          <input type="password" id="apPass" placeholder="Min 8 characters" minlength="8" style="flex:1;">
+          <button onclick="toggleApPass()" style="padding:0 12px;background:#444;color:#fff;border:1px solid #555;cursor:pointer;">Show</button>
+        </div>
+        <button onclick="saveApPassword()" style="width:100%;padding:10px;margin-top:10px;background:#9b59b6;color:#fff;border:none;cursor:pointer;border-radius:8px;font-size:13px;">Save AP Password</button>
+        <div id="apPassStatus" style="margin-top:8px;font-size:12px;color:#888;"></div>
       </div>
 
       <div class="settings-section">
@@ -554,13 +562,52 @@ function toggleWiFiPass() {
   }
 }
 
+function toggleApPass() {
+  const passInput = document.getElementById('apPass');
+  const btn = event.target;
+  if (passInput.type === 'password') {
+    passInput.type = 'text';
+    btn.textContent = 'Hide';
+  } else {
+    passInput.type = 'password';
+    btn.textContent = 'Show';
+  }
+}
+
+function saveApPassword() {
+  const statusEl = document.getElementById('apPassStatus');
+  const passInput = document.getElementById('apPass');
+  const newPassword = passInput.value;
+  
+  if (newPassword.length < 8) {
+    statusEl.textContent = 'Password must be at least 8 characters';
+    statusEl.style.color = '#e74c3c';
+    return;
+  }
+  
+  statusEl.textContent = 'Saving...';
+  statusEl.style.color = '#f39c12';
+  
+  fetch('/setApPassword?password=' + encodeURIComponent(newPassword))
+    .then(r => r.text())
+    .then(msg => {
+      statusEl.textContent = 'Saved! Robot will restart...';
+      statusEl.style.color = '#2ecc71';
+      setTimeout(() => alert('AP password updated. Robot will restart.'), 500);
+    })
+    .catch(err => {
+      statusEl.textContent = 'Error: ' + err;
+      statusEl.style.color = '#e74c3c';
+    });
+}
+
 function validateHostname(name) {
   // Remove Polish characters and diacritics
   let cleaned = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   // Replace spaces with hyphens
   cleaned = cleaned.replace(/\s+/g, "-");
-  // Remove invalid characters (only a-z, 0-9, - allowed)
-  cleaned = cleaned.replace(/[^a-z0-9-]/g, "").toLowerCase();
+  // Remove invalid characters (only a-z, 0-9, - allowed), keep case
+  cleaned = cleaned.replace(/[^a-zA-Z0-9-]/g, "");
   // Remove hyphens at start/end
   cleaned = cleaned.replace(/^-+|-+$/g, "");
   // Limit length
@@ -580,9 +627,10 @@ function saveDeviceName() {
   }
   
   const validatedName = validateHostname(originalName);
+  const normalizedOriginal = originalName.toLowerCase().replace(/\s+/g, '-');
   
-  if (validatedName !== originalName) {
-    inputEl.value = validatedName;
+  // Only show correction if there are actual invalid characters (not just case difference)
+  if (validatedName.toLowerCase() !== normalizedOriginal) {
     statusEl.textContent = 'Name corrected: ' + validatedName;
     statusEl.style.color = '#f39c12';
   } else {
