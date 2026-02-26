@@ -62,6 +62,7 @@ void runShakePose();
 void runShrugPose();
 void runDeadPose();
 void runCrabPose();
+void runWigglePose();
 void runWalkPose();
 void runWalkBackward();
 void runTurnLeft();
@@ -320,6 +321,28 @@ inline void runCrabPose() {
   }
   runStandPose(1);
   if (currentCommand == "crab") currentCommand = "";
+}
+
+inline void runWigglePose() {
+  Serial.println(F("WIGGLE"));
+  setFaceWithMode("happy", FACE_ANIM_LOOP);
+  runStandPose(0);
+  delayWithFace(200);
+  
+  for (int i = 0; i < 6; i++) {
+    setServoAngle(R1, 150); setServoAngle(L1, 30);
+    setServoAngle(R3, 110); setServoAngle(L3, 70);
+    setServoAngle(R4, 20); setServoAngle(L4, 160);
+    delayWithFace(250);
+    
+    setServoAngle(R1, 120); setServoAngle(L1, 60);
+    setServoAngle(R3, 70); setServoAngle(L3, 110);
+    setServoAngle(R4, 160); setServoAngle(L4, 20);
+    delayWithFace(250);
+  }
+  
+  runStandPose(1);
+  currentCommand = "";
 }
 
 // --- MOVEMENT ANIMATIONS ---

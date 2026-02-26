@@ -64,6 +64,9 @@ String currentAPPass = DEFAULT_AP_PASS;
 #define I2C_SDA 33
 #define I2C_SCL 35
 
+// Touch Sensor Pin
+#define TOUCH_SENSOR_PIN 12
+
 
 // DNS Server for Captive Portal
 DNSServer dnsServer;
@@ -102,6 +105,10 @@ bool networkConnected = false;
 IPAddress networkIP;
 const String DEFAULT_HOSTNAME = "sesame-robot";
 String deviceHostname = DEFAULT_HOSTNAME;
+
+// Touch Sensor
+bool lastTouchState = false;
+bool touchWiggleActive = false;
 
 // Servo Pins for Distro Board
 // ======================================================================
@@ -511,6 +518,8 @@ void setup() {
   }
   delay(10);
   
+  pinMode(TOUCH_SENSOR_PIN, INPUT);
+  
   setFace("rest");
   
   Serial.println(F("=== System Ready ==="));
@@ -524,6 +533,21 @@ void loop() {
   updateAnimatedFace();
   updateIdleBlink();
   updateWifiInfoScroll();
+  
+  // Touch sensor handling - immersive wiggle response
+  bool touchState = digitalRead(TOUCH_SENSOR_PIN);
+  if (touchState && !lastTouchState) {
+    if (!touchWiggleActive && currentCommand == "") {
+      touchWiggleActive = true;
+      currentCommand = "wiggle";
+      recordInput();
+      exitIdle();
+    }
+  }
+  if (!touchState) {
+    touchWiggleActive = false;
+  }
+  lastTouchState = touchState;
 
   if (currentCommand != "") {
     String cmd = currentCommand;
@@ -546,6 +570,7 @@ void loop() {
     else if (cmd == "shrug") runShrugPose();
     else if (cmd == "dead") runDeadPose();
     else if (cmd == "crab") runCrabPose();
+    else if (cmd == "wiggle") runWigglePose();
   }
   
   // Serial CLI for debugging (can be used to diagnose servo position issues and wiring)
