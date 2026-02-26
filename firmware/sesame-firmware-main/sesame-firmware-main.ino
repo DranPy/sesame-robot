@@ -109,6 +109,7 @@ String deviceHostname = DEFAULT_HOSTNAME;
 // Touch Sensor
 bool lastTouchState = false;
 bool touchWiggleActive = false;
+int8_t wiggleRunoutCount = 0;
 
 // Servo Pins for Distro Board
 // ======================================================================
@@ -534,19 +535,32 @@ void loop() {
   updateIdleBlink();
   updateWifiInfoScroll();
   
-  // Touch sensor handling - immersive wiggle response
+  // Touch sensor handling - wiggle animation
   bool touchState = digitalRead(TOUCH_SENSOR_PIN);
+  
   if (touchState && !lastTouchState) {
-    if (!touchWiggleActive && currentCommand == "") {
+    if (currentCommand == "wiggle" && wiggleRunoutCount > 0) {
+      wiggleRunoutCount = 0;
+      touchWiggleActive = true;
+      exitIdle();
+    }
+    else if (!touchWiggleActive && currentCommand == "") {
+      wiggleRunoutCount = 0;
       touchWiggleActive = true;
       currentCommand = "wiggle";
       recordInput();
       exitIdle();
+      setFaceWithMode("cute", FACE_ANIM_LOOP);
+      runStandPose(0);
+      delayWithFace(200);
     }
   }
-  if (!touchState) {
+  
+  if (!touchState && lastTouchState) {
+    wiggleRunoutCount = 4;
     touchWiggleActive = false;
   }
+  
   lastTouchState = touchState;
 
   if (currentCommand != "") {
@@ -570,7 +584,12 @@ void loop() {
     else if (cmd == "shrug") runShrugPose();
     else if (cmd == "dead") runDeadPose();
     else if (cmd == "crab") runCrabPose();
-    else if (cmd == "wiggle") runWigglePose();
+    else if (cmd == "wiggle") {
+      runWigglePose();
+      if (touchWiggleActive || wiggleRunoutCount > 0) {
+        delayWithFace(60 + random(-40, 41));
+      }
+    }
   }
   
   // Serial CLI for debugging (can be used to diagnose servo position issues and wiring)

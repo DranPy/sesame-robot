@@ -2,6 +2,9 @@
 
 #include <Arduino.h>
 
+extern bool touchWiggleActive;
+extern int8_t wiggleRunoutCount;
+
 enum ServoName : uint8_t {
   R1 = 0, 
   R2 = 1,
@@ -324,25 +327,30 @@ inline void runCrabPose() {
 }
 
 inline void runWigglePose() {
-  Serial.println(F("WIGGLE"));
-  setFaceWithMode("happy", FACE_ANIM_LOOP);
-  runStandPose(0);
-  delayWithFace(200);
+  static bool dir = false;
   
-  for (int i = 0; i < 6; i++) {
-    setServoAngle(R1, 150); setServoAngle(L1, 30);
-    setServoAngle(R3, 110); setServoAngle(L3, 70);
-    setServoAngle(R4, 20); setServoAngle(L4, 160);
-    delayWithFace(250);
-    
-    setServoAngle(R1, 120); setServoAngle(L1, 60);
-    setServoAngle(R3, 70); setServoAngle(L3, 110);
-    setServoAngle(R4, 160); setServoAngle(L4, 20);
-    delayWithFace(250);
+  if (!touchWiggleActive && wiggleRunoutCount <= 0) {
+    dir = false;
+    runStandPose(1);
+    currentCommand = "";
+    return;
   }
   
-  runStandPose(1);
-  currentCommand = "";
+  if (touchWiggleActive && wiggleRunoutCount == 0) {
+    // Normalny krok mruczenia
+  } else if (wiggleRunoutCount > 0) {
+    // Runout po puszczeniu
+    wiggleRunoutCount--;
+  }
+  
+  if (dir) {
+    setServoAngle(R3, 185); setServoAngle(L3, 5);
+    setServoAngle(R4, 5); setServoAngle(L4, 175);
+  } else {
+    setServoAngle(R3, 175); setServoAngle(L3, 0);
+    setServoAngle(R4, 0); setServoAngle(L4, 180);
+  }
+  dir = !dir;
 }
 
 // --- MOVEMENT ANIMATIONS ---
