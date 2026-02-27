@@ -230,6 +230,35 @@ git commit -m "Add OTA and WiFi manager features
 - Do not commit automatically - always wait for user confirmation
 - If user confirms, follow the commit message guidelines above
 
+### Push to Remote (Fork Workflow)
+
+After each commit, always push to the remote fork on GitHub. This ensures changes are backed up and available for review.
+
+```bash
+# Push current branch to fork
+git push origin Adix-Seasame
+
+# Or use -u to set upstream for first push
+git push -u origin Adix-Seasame
+```
+
+### Full Workflow
+
+1. **Make changes** - Write code, test locally
+2. **Commit** - Ask user for confirmation, create commit with descriptive message
+3. **Push** - Automatically push to `origin Adix-Seasame` after commit
+4. **Review** - Changes are now on GitHub fork, ready for PR if needed
+
+### When to Ask vs. Auto-Push
+
+| Action | Behavior |
+|--------|----------|
+| **Commit** | Always ask user for confirmation first |
+| **Push** | Auto-push after commit (no need to ask) |
+| **Force push** | Never - always ask user first |
+| **Pull Request** | Ask user if they want to create PR |
+| **Merge** | Never - leave to user/GitHub UI |
+
 ### Build Artifacts
 The `build/` directory should be ignored:
 
