@@ -566,8 +566,8 @@ inline void runTurnRight() {
 inline void runPissLeftPose() {
   Serial.println(F("PISS LEFT"));
   setFaceWithMode("pushup", FACE_ANIM_ONCE);
-  setServoAngle(R3, 135);
-  setServoAngle(R4, 45);
+  setServoAngle(R3, 125);
+  setServoAngle(R4, 55);
   setServoAngle(L3, 0);
   setServoAngle(L4, 180);
   setServoAngle(R1, 135);
@@ -591,8 +591,8 @@ inline void runPissRightPose() {
   setFaceWithMode("pushup", FACE_ANIM_ONCE);
   setServoAngle(R3, 180);
   setServoAngle(R4, 0);
-  setServoAngle(L3, 45);
-  setServoAngle(L4, 135);
+  setServoAngle(L3, 55);
+  setServoAngle(L4, 125);
   setServoAngle(R1, 135);
   setServoAngle(R2, 45);
   setServoAngle(L1, 45);
