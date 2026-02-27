@@ -597,6 +597,8 @@ void loop() {
     else if (cmd == "shrug") runShrugPose();
     else if (cmd == "dead") runDeadPose();
     else if (cmd == "crab") runCrabPose();
+    else if (cmd == "pissleft") runPissLeftPose();
+    else if (cmd == "pissright") runPissRightPose();
     else if (cmd == "wiggle") {
       runWigglePose();
       if (touchWiggleActive || wiggleRunoutCount > 0) {
@@ -634,6 +636,8 @@ void loop() {
         else if(strcmp(command_buffer, "rn sg") == 0) { currentCommand = "shrug"; runShrugPose(); }
         else if(strcmp(command_buffer, "rn dd") == 0) { currentCommand = "dead"; runDeadPose(); }
         else if(strcmp(command_buffer, "rn cb") == 0) { currentCommand = "crab"; runCrabPose(); }
+        else if(strcmp(command_buffer, "rn pl") == 0) { currentCommand = "pissleft"; runPissLeftPose(); }
+        else if(strcmp(command_buffer, "rn pr") == 0) { currentCommand = "pissright"; runPissRightPose(); }
         else if (strcmp(command_buffer, "subtrim") == 0 || strcmp(command_buffer, "st") == 0) {
           Serial.println("Subtrim values:");
           for (int i = 0; i < 8; i++) {

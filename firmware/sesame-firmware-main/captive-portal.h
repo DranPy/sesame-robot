@@ -402,6 +402,8 @@ const char index_html[] PROGMEM = R"rawliteral(
           <button class="btn-pose" onclick="pose('shrug')">Shrug</button>
           <button class="btn-pose" onclick="pose('dead')">Dead</button>
           <button class="btn-pose" onclick="pose('crab')">Crab</button>
+          <button class="btn-pose" onclick="pose('pissleft')">Piss L</button>
+          <button class="btn-pose" onclick="pose('pissright')">Piss R</button>
         </div>
       </div>
     </div>

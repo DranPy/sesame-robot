@@ -70,6 +70,8 @@ void runWalkPose();
 void runWalkBackward();
 void runTurnLeft();
 void runTurnRight();
+void runPissLeftPose();
+void runPissRightPose();
 
 // ====== POSES ======
 inline void runRestPose() {
@@ -559,4 +561,50 @@ inline void runTurnRight() {
     if (!pressingCheck("right", frameDelay)) return;
   }
   runStandPose(1);
+}
+
+inline void runPissLeftPose() {
+  Serial.println(F("PISS LEFT"));
+  setFaceWithMode("pushup", FACE_ANIM_ONCE);
+  setServoAngle(R3, 135);
+  setServoAngle(R4, 45);
+  setServoAngle(L3, 0);
+  setServoAngle(L4, 180);
+  setServoAngle(R1, 135);
+  setServoAngle(R2, 45);
+  setServoAngle(L1, 45);
+  setServoAngle(L2, 135);
+  setServoAngle(L4, 40);
+  delayWithFace(1500);
+  for (int i = 0; i < 3; i++) {
+    setServoAngle(L4, 40+20);
+    delayWithFace(100);
+    setServoAngle(L4, 40-20);
+    delayWithFace(100);
+  }
+  runStandPose(1);
+  if (currentCommand == "pissleft") currentCommand = "";
+}
+
+inline void runPissRightPose() {
+  Serial.println(F("PISS RIGHT"));
+  setFaceWithMode("pushup", FACE_ANIM_ONCE);
+  setServoAngle(R3, 180);
+  setServoAngle(R4, 0);
+  setServoAngle(L3, 45);
+  setServoAngle(L4, 135);
+  setServoAngle(R1, 135);
+  setServoAngle(R2, 45);
+  setServoAngle(L1, 45);
+  setServoAngle(L2, 135);
+  setServoAngle(R4, 130);
+  delayWithFace(1500);
+  for (int i = 0; i < 3; i++) {
+    setServoAngle(R4, 130+20);
+    delayWithFace(100);
+    setServoAngle(R4, 130-20);
+    delayWithFace(100);
+  }
+  runStandPose(1);
+  if (currentCommand == "pissright") currentCommand = "";
 }
