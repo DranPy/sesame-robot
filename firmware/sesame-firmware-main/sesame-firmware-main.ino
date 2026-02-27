@@ -224,6 +224,7 @@ bool pressingCheck(String cmd, int ms);
 void handleGetSettings();
 void handleSetSettings();
 void handleGetStatus();
+void handleGetServoPositions();
 void handleApiCommand();
 void updateWifiInfoScroll();
 void updateWifiInfoDisplay();
@@ -308,6 +309,17 @@ void handleGetStatus() {
     json += "\"rssi\":" + String(WiFi.RSSI());
   }
   
+  json += "}";
+  server.send(200, "application/json", json);
+}
+
+void handleGetServoPositions() {
+  String json = "{";
+  for (int i = 0; i < 8; i++) {
+    int angle = servos[i].attached() ? servos[i].read() : 90;
+    json += "\"s" + String(i) + "\":" + String(angle);
+    if (i < 7) json += ",";
+  }
   json += "}";
   server.send(200, "application/json", json);
 }
@@ -495,6 +507,7 @@ void setup() {
   server.on("/getSettings", handleGetSettings);
   server.on("/setSettings", handleSetSettings);
   server.on("/api/status", handleGetStatus);
+  server.on("/api/servoPositions", handleGetServoPositions);
   server.on("/api/command", handleApiCommand);
   
   server.on("/scan", handleWiFiScan);

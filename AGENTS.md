@@ -225,6 +225,11 @@ git commit -m "Add OTA and WiFi manager features
 - WiFi scanning and connection from web UI"
 ```
 
+### Commit Prompt
+- After completing each feature or bug fix, always ask the user if they want to commit the changes
+- Do not commit automatically - always wait for user confirmation
+- If user confirms, follow the commit message guidelines above
+
 ### Build Artifacts
 The `build/` directory should be ignored:
 

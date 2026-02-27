@@ -506,35 +506,35 @@ const char index_html[] PROGMEM = R"rawliteral(
       <div class="settings-section">
         <div class="motor-controls">
           <div class="motor-slider">
-            <label><span>S0 R1</span><span id="m1val">90&deg;</span></label>
+            <label><span>S0 R1</span> <span id="m1val">90&deg;</span></label>
             <input type="range" id="motor1" min="0" max="180" value="90" oninput="updateMotor(1, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S1 R2</span><span id="m2val">90&deg;</span></label>
+            <label><span>S1 R2</span> <span id="m2val">90&deg;</span></label>
             <input type="range" id="motor2" min="0" max="180" value="90" oninput="updateMotor(2, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S2 L1</span><span id="m3val">90&deg;</span></label>
+            <label><span>S2 L1</span> <span id="m3val">90&deg;</span></label>
             <input type="range" id="motor3" min="0" max="180" value="90" oninput="updateMotor(3, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S3 L2</span><span id="m4val">90&deg;</span></label>
+            <label><span>S3 L2</span> <span id="m4val">90&deg;</span></label>
             <input type="range" id="motor4" min="0" max="180" value="90" oninput="updateMotor(4, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S4 R4</span><span id="m5val">90&deg;</span></label>
+            <label><span>S4 R4</span> <span id="m5val">90&deg;</span></label>
             <input type="range" id="motor5" min="0" max="180" value="90" oninput="updateMotor(5, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S5 R3</span><span id="m6val">90&deg;</span></label>
+            <label><span>S5 R3</span> <span id="m6val">90&deg;</span></label>
             <input type="range" id="motor6" min="0" max="180" value="90" oninput="updateMotor(6, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S6 L3</span><span id="m7val">90&deg;</span></label>
+            <label><span>S6 L3</span> <span id="m7val">90&deg;</span></label>
             <input type="range" id="motor7" min="0" max="180" value="90" oninput="updateMotor(7, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S7 L4</span><span id="m8val">90&deg;</span></label>
+            <label><span>S7 L4</span> <span id="m8val">90&deg;</span></label>
             <input type="range" id="motor8" min="0" max="180" value="90" oninput="updateMotor(8, this.value)">
           </div>
         </div>
@@ -905,6 +905,20 @@ function closeSettings() {
 
 function openMotorControl() {
   document.getElementById('motorControlPanel').style.display = 'block';
+  fetch('/api/servoPositions')
+    .then(r => r.json())
+    .then(data => {
+      for (let i = 1; i <= 8; i++) {
+        const slider = document.getElementById('motor' + i);
+        const valEl = document.getElementById('m' + i + 'val');
+        const servoKey = 's' + (i - 1);
+        if (data[servoKey] !== undefined) {
+          slider.value = data[servoKey];
+          valEl.textContent = data[servoKey] + '\u00B0';
+        }
+      }
+    })
+    .catch(console.log);
 }
 
 function closeMotorControl() {
