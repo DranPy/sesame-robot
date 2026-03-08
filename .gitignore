@@ -1,0 +1,22 @@
+# Build artifacts
+firmware/sesame-firmware-main/build/
+*/build/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Arduino
+*.ino.bin
+*.ino.map
+*.elf
+
+# PlatformIO
+.pio/
+.vscode/

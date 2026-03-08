@@ -361,7 +361,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   </style>
 </head>
 <body>
-  <h2>Sesame Controller</h2>
+  <h2 id="robotTitle">Loading...</h2>
   <div class="command-queue" id="queueStatus">Command Queue: 0/3</div>
   
   <div class="sections-container">
@@ -402,6 +402,8 @@ const char index_html[] PROGMEM = R"rawliteral(
           <button class="btn-pose" onclick="pose('shrug')">Shrug</button>
           <button class="btn-pose" onclick="pose('dead')">Dead</button>
           <button class="btn-pose" onclick="pose('crab')">Crab</button>
+          <button class="btn-pose" onclick="pose('pissleft')">Piss L</button>
+          <button class="btn-pose" onclick="pose('pissright')">Piss R</button>
         </div>
       </div>
     </div>
@@ -459,6 +461,38 @@ const char index_html[] PROGMEM = R"rawliteral(
         <input type="color" id="customColor" value="#ff8c42" style="margin-top: 10px; display: none;">
       </div>
 
+      <div class="settings-section">
+        <h4>Device Settings</h4>
+        <label>Device Name (mDNS):</label>
+        <input type="text" id="deviceName" placeholder="sesame-robot" maxlength="32">
+        <div style="font-size:11px;color:#666;margin-top:4px;">Allowed: a-z, 0-9, - (spaces/Polish chars auto-corrected)</div>
+        <button onclick="saveDeviceName()" style="width:100%;padding:10px;margin-top:10px;background:#3498db;color:#fff;border:none;cursor:pointer;border-radius:8px;font-size:13px;">Save Name</button>
+        <div id="deviceNameStatus" style="margin-top:8px;font-size:12px;color:#888;"></div>
+        
+        <label style="margin-top:20px;">AP Password:</label>
+        <div style="display:flex;gap:5px;">
+          <input type="password" id="apPass" placeholder="Min 8 characters" minlength="8" style="flex:1;">
+          <button onclick="toggleApPass()" style="padding:0 12px;background:#444;color:#fff;border:1px solid #555;cursor:pointer;">Show</button>
+        </div>
+        <button onclick="saveApPassword()" style="width:100%;padding:10px;margin-top:10px;background:#9b59b6;color:#fff;border:none;cursor:pointer;border-radius:8px;font-size:13px;">Save AP Password</button>
+        <div id="apPassStatus" style="margin-top:8px;font-size:12px;color:#888;"></div>
+      </div>
+
+      <div class="settings-section">
+        <h4>WiFi Settings</h4>
+        <label>Network Name (SSID):</label>
+        <button onclick="scanWiFi()" style="width:100%;padding:10px;margin-bottom:8px;background:#444;color:#fff;border:1px solid #555;cursor:pointer;font-size:13px;">Scan Networks</button>
+        <select id="wifiSSID" style="margin-bottom:8px;"></select>
+        <label>Password:</label>
+        <div style="display:flex;gap:5px;">
+          <input type="password" id="wifiPass" placeholder="Network password" style="flex:1;">
+          <button onclick="toggleWiFiPass()" style="padding:0 12px;background:#444;color:#fff;border:1px solid #555;cursor:pointer;">Show</button>
+        </div>
+        <button onclick="connectWiFi()" style="width:100%;padding:12px;margin-top:12px;background:#00b894;color:#fff;border:none;cursor:pointer;font-weight:bold;border-radius:8px;">Connect & Restart</button>
+        <button onclick="resetWiFi()" style="width:100%;padding:10px;margin-top:8px;background:#e74c3c;color:#fff;border:none;cursor:pointer;border-radius:8px;font-size:13px;">Reset WiFi</button>
+        <div id="wifiStatus" style="margin-top:10px;font-size:12px;color:#888;"></div>
+      </div>
+
       <button class="btn-settings" style="width: 100%; margin-top: 20px;" onclick="openMotorControl()">Manual Motor Control</button>
 
       <button class="btn-save" onclick="saveSettings()">Save Settings</button>
@@ -474,35 +508,35 @@ const char index_html[] PROGMEM = R"rawliteral(
       <div class="settings-section">
         <div class="motor-controls">
           <div class="motor-slider">
-            <label><span>S0 R1</span><span id="m1val">90&deg;</span></label>
+            <label><span>S0 R1</span> <span id="m1val">90&deg;</span></label>
             <input type="range" id="motor1" min="0" max="180" value="90" oninput="updateMotor(1, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S1 R2</span><span id="m2val">90&deg;</span></label>
+            <label><span>S1 R2</span> <span id="m2val">90&deg;</span></label>
             <input type="range" id="motor2" min="0" max="180" value="90" oninput="updateMotor(2, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S2 L1</span><span id="m3val">90&deg;</span></label>
+            <label><span>S2 L1</span> <span id="m3val">90&deg;</span></label>
             <input type="range" id="motor3" min="0" max="180" value="90" oninput="updateMotor(3, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S3 L2</span><span id="m4val">90&deg;</span></label>
+            <label><span>S3 L2</span> <span id="m4val">90&deg;</span></label>
             <input type="range" id="motor4" min="0" max="180" value="90" oninput="updateMotor(4, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S4 R4</span><span id="m5val">90&deg;</span></label>
+            <label><span>S4 R4</span> <span id="m5val">90&deg;</span></label>
             <input type="range" id="motor5" min="0" max="180" value="90" oninput="updateMotor(5, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S5 R3</span><span id="m6val">90&deg;</span></label>
+            <label><span>S5 R3</span> <span id="m6val">90&deg;</span></label>
             <input type="range" id="motor6" min="0" max="180" value="90" oninput="updateMotor(6, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S6 L3</span><span id="m7val">90&deg;</span></label>
+            <label><span>S6 L3</span> <span id="m7val">90&deg;</span></label>
             <input type="range" id="motor7" min="0" max="180" value="90" oninput="updateMotor(7, this.value)">
           </div>
           <div class="motor-slider">
-            <label><span>S7 L4</span><span id="m8val">90&deg;</span></label>
+            <label><span>S7 L4</span> <span id="m8val">90&deg;</span></label>
             <input type="range" id="motor8" min="0" max="180" value="90" oninput="updateMotor(8, this.value)">
           </div>
         </div>
@@ -518,10 +552,195 @@ let commandQueue = 0;
 const MAX_COMMANDS = 3;
 let motorsLocked = false;
 
+function toggleWiFiPass() {
+  const passInput = document.getElementById('wifiPass');
+  const btn = event.target;
+  if (passInput.type === 'password') {
+    passInput.type = 'text';
+    btn.textContent = 'Hide';
+  } else {
+    passInput.type = 'password';
+    btn.textContent = 'Show';
+  }
+}
+
+function toggleApPass() {
+  const passInput = document.getElementById('apPass');
+  const btn = event.target;
+  if (passInput.type === 'password') {
+    passInput.type = 'text';
+    btn.textContent = 'Hide';
+  } else {
+    passInput.type = 'password';
+    btn.textContent = 'Show';
+  }
+}
+
+function saveApPassword() {
+  const statusEl = document.getElementById('apPassStatus');
+  const passInput = document.getElementById('apPass');
+  const newPassword = passInput.value;
+  
+  if (newPassword.length < 8) {
+    statusEl.textContent = 'Password must be at least 8 characters';
+    statusEl.style.color = '#e74c3c';
+    return;
+  }
+  
+  statusEl.textContent = 'Saving...';
+  statusEl.style.color = '#f39c12';
+  
+  fetch('/setApPassword?password=' + encodeURIComponent(newPassword))
+    .then(r => r.text())
+    .then(msg => {
+      statusEl.textContent = 'Saved! Robot will restart...';
+      statusEl.style.color = '#2ecc71';
+      setTimeout(() => alert('AP password updated. Robot will restart.'), 500);
+    })
+    .catch(err => {
+      statusEl.textContent = 'Error: ' + err;
+      statusEl.style.color = '#e74c3c';
+    });
+}
+
+function validateHostname(name) {
+  // Remove Polish characters and diacritics
+  let cleaned = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Replace spaces with hyphens
+  cleaned = cleaned.replace(/\s+/g, "-");
+  // Remove invalid characters (only a-z, 0-9, - allowed), keep case
+  cleaned = cleaned.replace(/[^a-zA-Z0-9-]/g, "");
+  // Remove hyphens at start/end
+  cleaned = cleaned.replace(/^-+|-+$/g, "");
+  // Limit length
+  cleaned = cleaned.substring(0, 32);
+  return cleaned || "sesame-robot";
+}
+
+function saveDeviceName() {
+  const statusEl = document.getElementById('deviceNameStatus');
+  const inputEl = document.getElementById('deviceName');
+  let originalName = inputEl.value.trim();
+  
+  if (!originalName) {
+    statusEl.textContent = 'Please enter a device name';
+    statusEl.style.color = '#e74c3c';
+    return;
+  }
+  
+  const validatedName = validateHostname(originalName);
+  const normalizedOriginal = originalName.toLowerCase().replace(/\s+/g, '-');
+  
+  // Only show correction if there are actual invalid characters (not just case difference)
+  if (validatedName.toLowerCase() !== normalizedOriginal) {
+    statusEl.textContent = 'Name corrected: ' + validatedName;
+    statusEl.style.color = '#f39c12';
+  } else {
+    statusEl.textContent = 'Saving...';
+    statusEl.style.color = '#f39c12';
+  }
+  
+  fetch('/setHostname?hostname=' + encodeURIComponent(validatedName))
+    .then(r => r.text())
+    .then(msg => {
+      statusEl.textContent = 'Saved! Robot will restart...';
+      statusEl.style.color = '#2ecc71';
+      setTimeout(() => alert('Device name updated to: ' + validatedName + '. Robot will restart.'), 500);
+    })
+    .catch(err => {
+      statusEl.textContent = 'Error: ' + err;
+      statusEl.style.color = '#e74c3c';
+    });
+}
+
+function scanWiFi() {
+  const statusEl = document.getElementById('wifiStatus');
+  const selectEl = document.getElementById('wifiSSID');
+  statusEl.textContent = 'Scanning...';
+  statusEl.style.color = '#f39c12';
+  
+  fetch('/scan')
+    .then(r => r.json())
+    .then(networks => {
+      selectEl.innerHTML = '';
+      networks.forEach(net => {
+        const opt = document.createElement('option');
+        opt.value = net.ssid;
+        opt.textContent = net.ssid + ' (' + net.rssi + ' dBm)';
+        selectEl.appendChild(opt);
+      });
+      statusEl.textContent = 'Found ' + networks.length + ' networks';
+      statusEl.style.color = '#2ecc71';
+    })
+    .catch(err => {
+      statusEl.textContent = 'Scan failed: ' + err;
+      statusEl.style.color = '#e74c3c';
+    });
+}
+
+function connectWiFi() {
+  const ssid = document.getElementById('wifiSSID').value;
+  const pass = document.getElementById('wifiPass').value;
+  const statusEl = document.getElementById('wifiStatus');
+  
+  if (!ssid) {
+    statusEl.textContent = 'Please select a network';
+    statusEl.style.color = '#e74c3c';
+    return;
+  }
+  
+  statusEl.textContent = 'Connecting...';
+  statusEl.style.color = '#f39c12';
+  
+  fetch('/wificonnect?ssid=' + encodeURIComponent(ssid) + '&pass=' + encodeURIComponent(pass))
+    .then(() => {
+      statusEl.textContent = 'Saved! Rebooting...';
+      statusEl.style.color = '#2ecc71';
+      alert('WiFi credentials saved. Sesame will restart and connect to ' + ssid);
+    })
+    .catch(err => {
+      statusEl.textContent = 'Error: ' + err;
+      statusEl.style.color = '#e74c3c';
+    });
+}
+
+function resetWiFi() {
+  if (!confirm('Reset saved WiFi credentials?')) return;
+  
+  fetch('/resetwifi')
+    .then(() => {
+      alert('WiFi reset. Sesame will restart in AP-only mode.');
+    })
+    .catch(err => {
+      alert('Error: ' + err);
+    });
+}
+
 // Load theme on page load
 document.addEventListener('DOMContentLoaded', () => {
   loadTheme();
+  loadDeviceName();
 });
+
+function loadDeviceName() {
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(data => {
+      // Convert hostname to friendly display name
+      // sesame-green -> Sesame Green, sesame-robot -> Sesame Robot
+      let friendlyName = data.hostname || 'Sesame';
+      friendlyName = friendlyName.replace(/-/g, ' ');
+      friendlyName = friendlyName.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+      
+      document.getElementById('robotTitle').textContent = friendlyName;
+      document.title = friendlyName + ' Controller';
+    })
+    .catch(() => {
+      document.getElementById('robotTitle').textContent = 'Sesame';
+    });
+}
 
 function loadTheme() {
   const savedColor = localStorage.getItem('themeColor');
@@ -688,6 +907,20 @@ function closeSettings() {
 
 function openMotorControl() {
   document.getElementById('motorControlPanel').style.display = 'block';
+  fetch('/api/servoPositions')
+    .then(r => r.json())
+    .then(data => {
+      for (let i = 1; i <= 8; i++) {
+        const slider = document.getElementById('motor' + i);
+        const valEl = document.getElementById('m' + i + 'val');
+        const servoKey = 's' + (i - 1);
+        if (data[servoKey] !== undefined) {
+          slider.value = data[servoKey];
+          valEl.textContent = data[servoKey] + '\u00B0';
+        }
+      }
+    })
+    .catch(console.log);
 }
 
 function closeMotorControl() {

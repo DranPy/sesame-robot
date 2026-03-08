@@ -33,6 +33,8 @@ There is also some included debugging firmware that may be helpful in getting yo
 *   **Serial CLI:** Control the robot and trigger animations via a Serial Command Line Interface or the web UI.
 *   **Pre-programmed Emotes:** Includes animations for Walking, Waving, Dancing, Pointing, Resting, and more.
 
+> [!NOTE] Recent firmware updates (Adix-Seasame branch) add: OTA updates, WiFi Manager, hostname config, AP password change, touch sensor support. [See firmware changelog](firmware/README.md#changelog)
+
 
 ## Watch the launch video on YouTube
 

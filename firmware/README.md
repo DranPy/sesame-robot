@@ -8,6 +8,7 @@ This document provides technical information on the firmware architecture, contr
 ## Table of Contents
 
 - [How to Flash the Firmware](#how-to-flash-the-firmware)
+- [Changelog](#changelog)
 - [Network Configuration](#network-configuration--connectivity)
 - [API Reference](#api-reference)
   - [Legacy Web Endpoints](#legacy-web-endpoints)
@@ -22,6 +23,25 @@ This document provides technical information on the firmware architecture, contr
 - [Technical Implementation](#technical-implementation-overview)
 - [Asset Pipeline & Face Customization](#asset-pipeline--face-customization)
 - [Hardware Abstraction Layer](#hardware-abstraction-layer-hal)
+
+## Changelog (Adix-Seasame Branch)
+
+### Features
+- OTA (Over-The-Air) firmware updates via ElegantOTA
+- WiFi Manager with persistent credentials storage
+- Device hostname configuration via web UI
+- AP password change support
+- Touch sensor (TTP223) with wiggle animation
+
+### Fixes
+- AP SSID not updating on startup
+- Hostname validation improvements
+- Manual motor control panel - real-time servo position feedback
+
+### Touch Sensor (TTP223) Configuration
+- **Default pin**: GPIO 12
+- **Definition**: `TOUCH_SENSOR_PIN` in `sesame-firmware-main.ino` (line 68)
+- To change: modify `#define TOUCH_SENSOR_PIN 12`
 
 ## How to Flash the Firmware
 
@@ -40,6 +60,7 @@ This document provides technical information on the firmware architecture, contr
    - `ESP32Servo`
    - `Adafruit SSD1306`
    - `Adafruit GFX Library`
+   - `ElegantOTA`
 
 ### Flashing Steps
 1. **Connect your board** via USB to your computer

@@ -6,15 +6,43 @@
 #include <ESP32Servo.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <ElegantOTA.h>
+#include <Preferences.h>
 #include "face-bitmaps.h"
 #include "movement-sequences.h"
 #include "captive-portal.h"
 #include "sound-instance.h"
 
+#define FIRMWARE_VERSION "1.1.0"
+
+Preferences preferences;
+int lastWifiStatus = -1;
+String savedSSID = "";
+String savedPassword = "";
+
+void onOTAStart()
+{
+  Serial.println("OTA Update Started");
+  setFaceWithMode("surprised", FACE_ANIM_ONCE);
+}
+
+void onOTAEnd(bool success)
+{
+  Serial.println(success ? "OTA Update Successful" : "OTA Update Failed");
+  if (success)
+  {
+    setFaceWithMode("happy", FACE_ANIM_ONCE);
+    delay(2000);
+  }
+  setFace("default");
+}
+
 // --- Access Point Configuration ---
 // This is the network the Robot will create
-#define AP_SSID "Sesame-Controller-BETA"
-#define AP_PASS "12345678" // Must be at least 8 characters
+const String DEFAULT_AP_SSID = "Sesame-Controller-BETA";
+const String DEFAULT_AP_PASS = "12345678"; // Must be at least 8 characters
+String currentAPSSID = DEFAULT_AP_SSID;
+String currentAPPass = DEFAULT_AP_PASS;
 
 // --- Station Mode Configuration (Optional) ---
 // Set these to connect to your home/office WiFi network
@@ -39,6 +67,9 @@
 // I2C Pins for S2 Mini Board
 // #define I2C_SDA 33
 // #define I2C_SCL 35
+
+// Touch Sensor Pin
+#define TOUCH_SENSOR_PIN 27
 
 // DNS Server for Captive Portal
 DNSServer dnsServer;
@@ -75,7 +106,13 @@ String wifiInfoText = "";
 // Network Mode
 bool networkConnected = false;
 IPAddress networkIP;
-String deviceHostname = "sesame-robot";
+const String DEFAULT_HOSTNAME = "sesame-robot";
+String deviceHostname = DEFAULT_HOSTNAME;
+
+// Touch Sensor
+bool lastTouchState = false;
+bool touchWiggleActive = false;
+int8_t wiggleRunoutCount = 0;
 
 // Servo Pins for Distro Board
 // ======================================================================
@@ -188,8 +225,10 @@ bool pressingCheck(String cmd, int ms);
 void handleGetSettings();
 void handleSetSettings();
 void handleGetStatus();
+void handleGetServoPositions();
 void handleApiCommand();
 void updateWifiInfoScroll();
+void updateWifiInfoDisplay();
 void recordInput();
 
 void handleRoot()
@@ -276,13 +315,34 @@ void handleSetSettings()
 void handleGetStatus()
 {
   String json = "{";
+  json += "\"firmware\":\"" FIRMWARE_VERSION "\",";
   json += "\"currentCommand\":\"" + currentCommand + "\",";
   json += "\"currentFace\":\"" + currentFaceName + "\",";
   json += "\"networkConnected\":" + String(networkConnected ? "true" : "false") + ",";
-  json += "\"apIP\":\"" + WiFi.softAPIP().toString() + "\"";
+  json += "\"apIP\":\"" + WiFi.softAPIP().toString() + "\",";
+  json += "\"apSSID\":\"" + currentAPSSID + "\",";
+  json += "\"hostname\":\"" + deviceHostname + "\"";
+
   if (networkConnected)
   {
-    json += ",\"networkIP\":\"" + networkIP.toString() + "\"";
+    json += ",\"networkIP\":\"" + networkIP.toString() + "\",";
+    json += "\"ssid\":\"" + WiFi.SSID() + "\",";
+    json += "\"rssi\":" + String(WiFi.RSSI());
+  }
+
+  json += "}";
+  server.send(200, "application/json", json);
+}
+
+void handleGetServoPositions()
+{
+  String json = "{";
+  for (int i = 0; i < 8; i++)
+  {
+    int angle = servos[i].attached() ? servos[i].read() : 90;
+    json += "\"s" + String(i) + "\":" + String(angle);
+    if (i < 7)
+      json += ",";
   }
   json += "}";
   server.send(200, "application/json", json);
@@ -364,7 +424,6 @@ void handleApiCommand()
   {
     setFace(face);
   }
-  //
 
   // If face-only, just acknowledge
   if (faceOnly)
@@ -399,125 +458,130 @@ SoundNote bootSound[] = {
 void setup()
 {
   Serial.begin(115200);
+  Serial.println("=== Sesame Robot Firmware v" FIRMWARE_VERSION " ===");
   randomSeed(micros());
 
   sound.begin();
   sound.play(bootSound, 3);
 
-  // I2C Init for ESP32
   Wire.begin(I2C_SDA, I2C_SCL);
 
-  // OLED Init
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR))
   {
     Serial.println(F("SSD1306 allocation failed."));
     while (1)
       ;
   }
-
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
   display.setCursor(0, 0);
-  display.println(F("Setting up WiFi..."));
+  display.println(F("Initializing..."));
   display.display();
 
-  // --- WIFI CONFIGURATION ---
-  // Try to connect to network first if configured
-  if (ENABLE_NETWORK_MODE && String(NETWORK_SSID).length() > 0)
-  {
-    Serial.println("Attempting to connect to network: " + String(NETWORK_SSID));
-    WiFi.mode(WIFI_AP_STA); // Enable both AP and Station modes
-    WiFi.setHostname(deviceHostname.c_str());
-    WiFi.begin(NETWORK_SSID, NETWORK_PASS);
+  WiFi.mode(WIFI_AP_STA);
 
-    // Wait up to 10 seconds for connection
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20)
+  // Load settings from Preferences BEFORE creating AP
+  preferences.begin("sesame-wifi", true);
+  savedSSID = preferences.getString("ssid", "");
+  savedPassword = preferences.getString("pass", "");
+  deviceHostname = preferences.getString("hostname", DEFAULT_HOSTNAME);
+  String savedAPSSID = preferences.getString("apssid", "");
+  String savedAPPass = preferences.getString("appass", "");
+  if (savedAPSSID.length() > 0)
+  {
+    currentAPSSID = savedAPSSID;
+  }
+  if (savedAPPass.length() >= 8)
+  {
+    currentAPPass = savedAPPass;
+  }
+  preferences.end();
+
+  Serial.println("[HOSTNAME] Device name: " + deviceHostname);
+  Serial.println("[HOSTNAME] AP SSID: " + currentAPSSID);
+  Serial.println("[HOSTNAME] AP Password: " + currentAPPass);
+
+  // Create AP with the correct SSID
+  WiFi.softAP(currentAPSSID.c_str(), currentAPPass.c_str());
+
+  if (savedSSID.length() > 0)
+  {
+    Serial.println("[WIFI] Attempting saved connection: " + savedSSID);
+    WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
+
+    int timeout = 0;
+    while (WiFi.status() != WL_CONNECTED && timeout < 20)
     {
       delay(500);
       Serial.print(".");
-      attempts++;
+      timeout++;
     }
 
     if (WiFi.status() == WL_CONNECTED)
     {
       networkConnected = true;
       networkIP = WiFi.localIP();
-      Serial.println();
-      Serial.print("Connected to network! IP: ");
-      Serial.println(networkIP);
+      Serial.println("\n[WIFI] Connected! IP: " + networkIP.toString());
+
+      if (MDNS.begin(deviceHostname.c_str()))
+      {
+        Serial.println("[mDNS] Started: http://" + deviceHostname + ".local");
+        MDNS.addService("http", "tcp", 80);
+      }
     }
     else
     {
-      Serial.println();
-      Serial.println("Failed to connect to network. Running in AP-only mode.");
-      WiFi.mode(WIFI_AP); // Fall back to AP-only
+      Serial.println("\n[WIFI] Failed to connect - running AP only");
     }
   }
   else
   {
-    WiFi.mode(WIFI_AP);
-    Serial.println("Network mode disabled. Running in AP-only mode.");
+    Serial.println("[WIFI] No saved credentials - running AP only");
   }
 
-  // --- ACCESS POINT CONFIGURATION ---
-  WiFi.softAP(AP_SSID, AP_PASS);
   IPAddress myIP = WiFi.softAPIP();
-
-  Serial.print("AP Created. IP: ");
+  Serial.print("[AP] Created. IP: ");
   Serial.println(myIP);
 
-  // Build WiFi info text for scrolling
-  if (networkConnected)
-  {
-    wifiInfoText = "AP: " + String(AP_SSID) + " (" + myIP.toString() + ")  |  Network: " + String(NETWORK_SSID) + " (" + networkIP.toString() + ") or " + deviceHostname + ".local  |  ";
-  }
-  else
-  {
-    wifiInfoText = "Connect to WiFi: " + String(AP_SSID) + "  |  Pass: " + String(AP_PASS) + "  |  IP: " + myIP.toString() + "  |  Captive Portal will auto-open!  |  ";
-  }
+  updateWifiInfoText();
 
-  // Initialize input tracking
   lastInputTime = millis();
   firstInputReceived = false;
-  showingWifiInfo = false;
+  showingWifiInfo = true; // Show WiFi info immediately on startup
+  wifiScrollPos = 0;
+  lastWifiScrollMs = millis();
 
-  // Start mDNS responder for local network discovery
-  if (MDNS.begin(deviceHostname.c_str()))
+  if (!networkConnected)
   {
-    Serial.println("mDNS responder started");
-    Serial.print("Access controller at: http://");
-    Serial.print(deviceHostname);
-    Serial.println(".local");
-    MDNS.addService("http", "tcp", 80);
-  }
-  else
-  {
-    Serial.println("Error setting up mDNS responder!");
+    if (MDNS.begin(deviceHostname.c_str()))
+    {
+      Serial.println("[mDNS] Started: http://" + deviceHostname + ".local");
+      MDNS.addService("http", "tcp", 80);
+    }
   }
 
-  // Start DNS Server for Captive Portal
-  // This redirects ALL domain requests to the ESP32's IP
   dnsServer.start(DNS_PORT, "*", myIP);
 
-  // Web Server Routes
   server.on("/", handleRoot);
   server.on("/cmd", handleCommandWeb);
   server.on("/getSettings", handleGetSettings);
   server.on("/setSettings", handleSetSettings);
-
-  // API endpoints for network communication
   server.on("/api/status", handleGetStatus);
+  server.on("/api/servoPositions", handleGetServoPositions);
   server.on("/api/command", handleApiCommand);
 
-  // Catch-all route for captive portal
-  // This ensures any URL redirects to the controller page
+  server.on("/scan", handleWiFiScan);
+  server.on("/wificonnect", handleWiFiConnect);
+  server.on("/resetwifi", handleWiFiReset);
+  server.on("/setHostname", handleSetHostname);
+  server.on("/setApPassword", handleSetApPassword);
+
   server.onNotFound(handleRoot);
 
+  ElegantOTA.begin(&server);
   server.begin();
 
-  // PWM Init
   ESP32PWM::allocateTimer(0);
   ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2);
@@ -526,27 +590,60 @@ void setup()
   for (int i = 0; i < 8; i++)
   {
     servos[i].setPeriodHertz(50);
-    // Map 0-180 to approx 732-2929us
     servos[i].attach(servoPins[i], 732, 2929);
   }
   delay(10);
 
-  // Show rest face on startup without moving motors
+  pinMode(TOUCH_SENSOR_PIN, INPUT);
+
   setFace("rest");
 
-  Serial.println(F("HTTP server & Captive Portal started."));
+  Serial.println(F("=== System Ready ==="));
 }
 
 void loop()
 {
-  // Process DNS requests for captive portal
   dnsServer.processNextRequest();
-  sound.update();
-
   server.handleClient();
+  ElegantOTA.loop();
+  checkWiFiStatus();
   updateAnimatedFace();
   updateIdleBlink();
   updateWifiInfoScroll();
+
+  sound.update();
+
+  // Touch sensor handling - wiggle animation
+  bool touchState = digitalRead(TOUCH_SENSOR_PIN);
+
+  if (touchState && !lastTouchState)
+  {
+    if (currentCommand == "wiggle" && wiggleRunoutCount > 0)
+    {
+      wiggleRunoutCount = 0;
+      touchWiggleActive = true;
+      exitIdle();
+    }
+    else if (!touchWiggleActive && currentCommand == "")
+    {
+      wiggleRunoutCount = 0;
+      touchWiggleActive = true;
+      currentCommand = "wiggle";
+      recordInput();
+      exitIdle();
+      setFaceWithMode("cute", FACE_ANIM_LOOP);
+      runStandPose(0);
+      delayWithFace(200);
+    }
+  }
+
+  if (!touchState && lastTouchState)
+  {
+    wiggleRunoutCount = 4;
+    touchWiggleActive = false;
+  }
+
+  lastTouchState = touchState;
 
   if (currentCommand != "")
   {
@@ -597,6 +694,18 @@ void loop()
       runDeadPose();
     else if (cmd == "crab")
       runCrabPose();
+    else if (cmd == "pissleft")
+      runPissLeftPose();
+    else if (cmd == "pissright")
+      runPissRightPose();
+    else if (cmd == "wiggle")
+    {
+      runWigglePose();
+      if (touchWiggleActive || wiggleRunoutCount > 0)
+      {
+        delayWithFace(60 + random(-40, 41));
+      }
+    }
   }
 
   // Serial CLI for debugging (can be used to diagnose servo position issues and wiring)
@@ -704,6 +813,16 @@ void loop()
         {
           currentCommand = "crab";
           runCrabPose();
+        }
+        else if (strcmp(command_buffer, "rn pl") == 0)
+        {
+          currentCommand = "pissleft";
+          runPissLeftPose();
+        }
+        else if (strcmp(command_buffer, "rn pr") == 0)
+        {
+          currentCommand = "pissright";
+          runPissRightPose();
         }
         else if (strcmp(command_buffer, "subtrim") == 0 || strcmp(command_buffer, "st") == 0)
         {
@@ -1037,7 +1156,7 @@ bool pressingCheck(String cmd, int ms)
     server.handleClient();
     dnsServer.processNextRequest();
     updateAnimatedFace();
-    sound.update();
+    // sound.update();
     if (currentCommand != cmd)
     {
       runStandPose(1);
@@ -1055,34 +1174,36 @@ void recordInput()
   {
     firstInputReceived = true;
     showingWifiInfo = false;
+    // Restore the face when stopping WiFi info display
+    if (currentFaceFrames != nullptr && currentFaceFrameCount > 0)
+    {
+      updateFaceBitmap(currentFaceFrames[currentFaceFrameIndex]);
+    }
   }
 }
 
 void updateWifiInfoScroll()
 {
-  // Don't show WiFi info if first input has been received
-  if (firstInputReceived)
-  {
-    if (showingWifiInfo)
-    {
-      showingWifiInfo = false;
-      // Restore the current face
-      if (currentFaceFrames != nullptr && currentFaceFrameCount > 0)
-      {
-        updateFaceBitmap(currentFaceFrames[currentFaceFrameIndex]);
-      }
-    }
-    return;
-  }
-
   unsigned long now = millis();
 
-  // Check if 30 seconds have passed without input
+  // If not showing WiFi info, check if we should start (after 30s idle)
   if (!showingWifiInfo && (now - lastInputTime >= 30000))
   {
     showingWifiInfo = true;
     wifiScrollPos = 0;
     lastWifiScrollMs = now;
+  }
+
+  // If WiFi info is active, check if we should stop (after 30s of activity)
+  if (showingWifiInfo && firstInputReceived && (now - lastInputTime < 30000))
+  {
+    showingWifiInfo = false;
+    // Restore the face
+    if (currentFaceFrames != nullptr && currentFaceFrameCount > 0)
+    {
+      updateFaceBitmap(currentFaceFrames[currentFaceFrameIndex]);
+    }
+    return;
   }
 
   if (!showingWifiInfo)
@@ -1122,4 +1243,210 @@ void updateWifiInfoScroll()
       wifiScrollPos = 0;
     }
   }
+}
+
+void checkWiFiStatus()
+{
+  int currentStatus = WiFi.status();
+
+  // Check if we just connected to WiFi
+  if (currentStatus == WL_CONNECTED && !networkConnected)
+  {
+    networkConnected = true;
+    networkIP = WiFi.localIP();
+    Serial.println("[WIFI] Status: CONNECTED | IP: " + networkIP.toString());
+    updateWifiInfoText();
+    updateWifiInfoDisplay(); // Force refresh display
+
+    if (!MDNS.begin(deviceHostname.c_str()))
+    {
+      Serial.println("[mDNS] Error starting");
+    }
+    else
+    {
+      MDNS.addService("http", "tcp", 80);
+    }
+  }
+  // Check if we got disconnected
+  else if (currentStatus != WL_CONNECTED && networkConnected)
+  {
+    Serial.println("[WIFI] Status: DISCONNECTED");
+    networkConnected = false;
+    updateWifiInfoText();
+    updateWifiInfoDisplay(); // Force refresh display
+  }
+
+  lastWifiStatus = currentStatus;
+}
+
+// Force immediate display update
+void updateWifiInfoDisplay()
+{
+  if (showingWifiInfo)
+  {
+    wifiScrollPos = 0;
+    lastWifiScrollMs = millis();
+  }
+}
+
+void updateWifiInfoText()
+{
+  IPAddress apIP = WiFi.softAPIP();
+  if (networkConnected)
+  {
+    wifiInfoText = "AP: " + currentAPSSID + " (" + apIP.toString() + ")  |  Network: " +
+                   WiFi.SSID() + " (" + networkIP.toString() + ") or " + deviceHostname + ".local  |  ";
+  }
+  else
+  {
+    wifiInfoText = "WiFi: " + currentAPSSID + " | Pass: " + currentAPPass + " | IP: " +
+                   apIP.toString() + " | http://" + deviceHostname + ".local  |  ";
+  }
+}
+
+void handleWiFiScan()
+{
+  Serial.println("[WIFI] Scanning networks...");
+  int n = WiFi.scanNetworks(false, true);
+  String json = "[";
+  for (int i = 0; i < n; i++)
+  {
+    json += "{\"ssid\":\"" + WiFi.SSID(i) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
+    if (i < n - 1)
+      json += ",";
+  }
+  json += "]";
+  server.send(200, "application/json", json);
+  WiFi.scanDelete();
+  Serial.print("[WIFI] Scan complete. Found: ");
+  Serial.println(n);
+}
+
+void handleWiFiConnect()
+{
+  if (!server.hasArg("ssid") || !server.hasArg("pass"))
+  {
+    server.send(400, "text/plain", "Missing ssid or pass");
+    return;
+  }
+
+  String newSSID = server.arg("ssid");
+  String newPass = server.arg("pass");
+
+  Serial.println("[WIFI] Saving new credentials: " + newSSID);
+
+  preferences.begin("sesame-wifi", false);
+  preferences.putString("ssid", newSSID);
+  preferences.putString("pass", newPass);
+  preferences.end();
+
+  server.send(200, "text/plain", "Rebooting to connect...");
+  delay(500);
+  ESP.restart();
+}
+
+void handleWiFiReset()
+{
+  Serial.println("[WIFI] Resetting saved credentials");
+  preferences.begin("sesame-wifi", false);
+  preferences.clear();
+  preferences.end();
+
+  server.send(200, "text/plain", "WiFi credentials cleared. Rebooting...");
+  delay(500);
+  ESP.restart();
+}
+
+void handleSetHostname()
+{
+  if (!server.hasArg("hostname"))
+  {
+    server.send(400, "text/plain", "Missing hostname parameter");
+    return;
+  }
+
+  String newHostname = server.arg("hostname");
+
+  // Validate hostname (lowercase, no spaces)
+  newHostname.trim();
+  newHostname.toLowerCase();
+
+  // Remove invalid characters
+  for (int i = newHostname.length() - 1; i >= 0; i--)
+  {
+    char c = newHostname.charAt(i);
+    if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-'))
+    {
+      newHostname.remove(i, 1);
+    }
+  }
+
+  // Remove hyphens at start/end
+  while (newHostname.startsWith("-"))
+    newHostname.remove(0, 1);
+  while (newHostname.endsWith("-"))
+    newHostname.remove(newHostname.length() - 1, 1);
+
+  if (newHostname.length() == 0)
+  {
+    newHostname = DEFAULT_HOSTNAME;
+  }
+
+  // Create friendly display name from hostname (sesame-green -> Sesame Green)
+  String friendlyName = newHostname;
+  friendlyName.replace("-", " ");
+  // Capitalize first letter of each word
+  if (friendlyName.length() > 0)
+  {
+    friendlyName[0] = toupper(friendlyName[0]);
+    for (int i = 1; i < friendlyName.length(); i++)
+    {
+      if (friendlyName[i - 1] == ' ')
+      {
+        friendlyName[i] = toupper(friendlyName[i]);
+      }
+    }
+  }
+
+  // Create AP SSID from friendly name
+  String newAPSSID = friendlyName + " AP";
+
+  Serial.println("[HOSTNAME] Saving: " + newHostname);
+  Serial.println("[HOSTNAME] AP SSID: " + newAPSSID);
+
+  preferences.begin("sesame-wifi", false);
+  preferences.putString("hostname", newHostname);
+  preferences.putString("apssid", newAPSSID);
+  preferences.end();
+
+  server.send(200, "text/plain", "Saved: " + friendlyName + ". Rebooting...");
+  delay(500);
+  ESP.restart();
+}
+
+void handleSetApPassword()
+{
+  if (!server.hasArg("password"))
+  {
+    server.send(400, "text/plain", "Missing password parameter");
+    return;
+  }
+
+  String newPassword = server.arg("password");
+
+  if (newPassword.length() < 8)
+  {
+    server.send(400, "text/plain", "Password must be at least 8 characters");
+    return;
+  }
+
+  Serial.println("[AP] Saving new password");
+
+  preferences.begin("sesame-wifi", false);
+  preferences.putString("appass", newPassword);
+  preferences.end();
+
+  server.send(200, "text/plain", "AP password saved. Rebooting...");
+  delay(500);
+  ESP.restart();
 }
