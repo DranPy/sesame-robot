@@ -12,6 +12,8 @@
 #include "movement-sequences.h"
 #include "captive-portal.h"
 #include "sound-instance.h"
+#include "DistanceSensor.h"
+#include "distance-sensor-instance.h"
 
 #define FIRMWARE_VERSION "1.1.0"
 
@@ -466,6 +468,11 @@ void setup()
 
   Wire.begin(I2C_SDA, I2C_SCL);
 
+  if (!distanceSensor.begin())
+  {
+    Serial.println(F("[TOF] Continuing without distance sensor"));
+  }
+
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR))
   {
     Serial.println(F("SSD1306 allocation failed."));
@@ -612,6 +619,7 @@ void loop()
   updateWifiInfoScroll();
 
   sound.update();
+  distanceSensor.update();
 
   // Touch sensor handling - wiggle animation
   bool touchState = digitalRead(TOUCH_SENSOR_PIN);
@@ -644,6 +652,28 @@ void loop()
   }
 
   lastTouchState = touchState;
+
+  // Distance sensor reactions — idle mode only
+  if (distanceSensor.isPresent() && currentCommand == "" && !touchWiggleActive)
+  {
+    if (distanceSensor.isWaveDetected())
+    {
+      Serial.println(F("[TOF] Wave detected — waving back"));
+      currentCommand = "wave";
+      recordInput();
+      exitIdle();
+      setFaceWithMode("happy", FACE_ANIM_LOOP);
+      sound.play(SOUND_WAVE);
+    }
+    else if (distanceSensor.isProximityDetected())
+    {
+      Serial.println(F("[TOF] Proximity alert — scared reaction"));
+      recordInput();
+      exitIdle();
+      setFaceWithMode("surprised", FACE_ANIM_ONCE);
+      sound.play(SOUND_SCARED);
+    }
+  }
 
   if (currentCommand != "")
   {
@@ -1075,7 +1105,7 @@ void delayWithFace(unsigned long ms)
     updateAnimatedFace();
     server.handleClient();
     dnsServer.processNextRequest();
-    // sound.update();
+    sound.update();
     delay(5);
   }
 }
@@ -1156,7 +1186,7 @@ bool pressingCheck(String cmd, int ms)
     server.handleClient();
     dnsServer.processNextRequest();
     updateAnimatedFace();
-    // sound.update();
+    sound.update();
     if (currentCommand != cmd)
     {
       runStandPose(1);

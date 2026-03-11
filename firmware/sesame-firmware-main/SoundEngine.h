@@ -18,7 +18,8 @@ enum SoundID {
   SOUND_SHAKE,
   SOUND_SHRUG,
   SOUND_DEAD,
-  SOUND_CRAB
+  SOUND_CRAB,
+  SOUND_SCARED
 };
 
 struct SoundNote {
